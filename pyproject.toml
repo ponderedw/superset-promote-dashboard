@@ -1,23 +1,18 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "superset-promote-dashboard"
 version = "0.1.0"
 description = "Superset plugin to swap all chart datasources in a dashboard to a target database"
-requires-python = ">=3.10"
-dependencies = [
-    "flask>=2.3",
-    "flask-appbuilder>=4.3",
-]
+readme = "README.md"
+packages = [{include = "superset_promote_dashboard"}]
 
-[project.optional-dependencies]
-dev = ["apache-superset>=4.1"]
+[tool.poetry.dependencies]
+python = ">=3.10"
+flask = ">=2.3"
+flask-appbuilder = ">=4.3"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["superset_promote_dashboard*"]
-
-[tool.setuptools.package-data]
-superset_promote_dashboard = ["templates/*.html"]
+[tool.poetry.group.dev.dependencies]
+apache-superset = ">=4.1"

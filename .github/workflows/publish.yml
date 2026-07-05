@@ -1,0 +1,38 @@
+name: Publish to PyPI
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.filter.outputs.package == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            package:
+              - 'superset_promote_dashboard/**/*'
+              - 'pyproject.toml'
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: filter
+    if: needs.filter.outputs.package == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - run: curl -sSL https://install.python-poetry.org | python3 -
+      - run: poetry install
+      - run: poetry build
+      - env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: poetry publish -u __token__ -p $PYPI_TOKEN
