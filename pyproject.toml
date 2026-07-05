@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "superset-promote-dashboard"
+version = "0.1.0"
+description = "Superset plugin to swap all chart datasources in a dashboard to a target database"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=2.3",
+    "flask-appbuilder>=4.3",
+]
+
+[project.optional-dependencies]
+dev = ["apache-superset>=4.1"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["superset_promote_dashboard*"]
+
+[tool.setuptools.package-data]
+superset_promote_dashboard = ["templates/*.html"]

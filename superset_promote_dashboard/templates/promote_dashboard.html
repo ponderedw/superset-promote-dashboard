@@ -1,0 +1,312 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/baselib.html' as baselib %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token }}" hidden>
+<style>
+  .promote-wrap {
+    max-width: 900px;
+    margin: 40px auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .promote-wrap h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #1a1a2e;
+  }
+  .promote-wrap .subtitle {
+    color: #666;
+    margin-bottom: 28px;
+    font-size: 0.95rem;
+  }
+  .form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 220px;
+  }
+  .form-group label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .form-group select {
+    padding: 9px 12px;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background: #fff;
+    color: #222;
+    outline: none;
+    cursor: pointer;
+  }
+  .form-group select:focus {
+    border-color: #5a67d8;
+    box-shadow: 0 0 0 3px rgba(90, 103, 216, 0.15);
+  }
+  .btn {
+    padding: 9px 22px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-preview { background: #5a67d8; color: #fff; }
+  .btn-preview:hover:not(:disabled) { background: #4c56c0; }
+  .btn-promote { background: #38a169; color: #fff; }
+  .btn-promote:hover:not(:disabled) { background: #2f8a58; }
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  #status-msg {
+    font-size: 0.88rem;
+    color: #666;
+  }
+
+  /* Preview table */
+  #preview-section { display: none; }
+  table.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  table.preview-table th {
+    background: #f4f5f7;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #e2e2e2;
+  }
+  table.preview-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+    color: #333;
+  }
+  table.preview-table tr:last-child td { border-bottom: none; }
+  table.preview-table tr:hover td { background: #fafafa; }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-swap           { background: #ebf4ff; color: #2b6cb0; }
+  .badge-no_match       { background: #fff3e0; color: #b7791f; }
+  .badge-virtual        { background: #f0f0f0; color: #666; }
+  .badge-already_current{ background: #f0fff4; color: #276749; }
+  .badge-promoted       { background: #e6ffed; color: #276749; }
+  .badge-failed         { background: #fff5f5; color: #c53030; }
+  .badge-skipped        { background: #fafafa; color: #888; }
+
+  .summary-bar {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    color: #555;
+  }
+  .summary-bar strong { color: #222; }
+</style>
+
+<div class="promote-wrap">
+  <h1>Promote Dashboard</h1>
+  <p class="subtitle">
+    Swap all chart datasources in a dashboard to a target database connection
+    in one click. Charts are matched by table name.
+  </p>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="dashboard-select">Dashboard</label>
+      <select id="dashboard-select">
+        <option value="">— select a dashboard —</option>
+        {% for d in dashboards %}
+        <option value="{{ d.id }}">{{ d.dashboard_title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="db-select">Target Database</label>
+      <select id="db-select">
+        <option value="">— select a database —</option>
+        {% for db in databases %}
+        <option value="{{ db.id }}">{{ db.database_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-preview" id="btn-preview">Preview</button>
+    <button class="btn btn-promote" id="btn-promote" style="display:none">Promote</button>
+    <span id="status-msg"></span>
+  </div>
+
+  <div id="preview-section">
+    <div class="summary-bar" id="summary-bar"></div>
+    <table class="preview-table">
+      <thead>
+        <tr>
+          <th>Chart</th>
+          <th>Current Dataset</th>
+          <th>Target Dataset</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="preview-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script nonce="{{ baselib.get_nonce() }}">
+(function () {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  const dashSel   = document.getElementById('dashboard-select');
+  const dbSel     = document.getElementById('db-select');
+  const btnPreview = document.getElementById('btn-preview');
+  const btnPromote = document.getElementById('btn-promote');
+  const statusMsg  = document.getElementById('status-msg');
+  const previewSec = document.getElementById('preview-section');
+  const summaryBar = document.getElementById('summary-bar');
+  const tbody      = document.getElementById('preview-body');
+
+  let currentPreview = [];
+
+  function setStatus(msg) { statusMsg.textContent = msg; }
+
+  function badgeHtml(status) {
+    const labels = {
+      will_swap:       ['Will swap',        'badge-swap'],
+      already_current: ['Already on target', 'badge-already_current'],
+      no_match:        ['No match',          'badge-no_match'],
+      virtual:         ['Virtual — skip',    'badge-virtual'],
+      promoted:        ['Promoted',          'badge-promoted'],
+      failed:          ['Failed',            'badge-failed'],
+      skipped:         ['Skipped',           'badge-skipped'],
+    };
+    const [label, cls] = labels[status] || [status, ''];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  function renderTable(rows) {
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escHtml(r.chart_name)}</td>
+        <td>${escHtml(r.current_dataset || '—')}</td>
+        <td>${escHtml(r.matched_dataset || '—')}</td>
+        <td>${badgeHtml(r.status)}</td>
+      </tr>`).join('');
+  }
+
+  function renderSummary(rows) {
+    const counts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
+    const parts = [
+      counts.will_swap  ? `<strong>${counts.will_swap}</strong> will swap`   : null,
+      counts.no_match   ? `<strong>${counts.no_match}</strong> no match`     : null,
+      counts.virtual    ? `<strong>${counts.virtual}</strong> virtual`       : null,
+      counts.promoted   ? `<strong>${counts.promoted}</strong> promoted`     : null,
+      counts.failed     ? `<strong>${counts.failed}</strong> failed`         : null,
+    ].filter(Boolean);
+    summaryBar.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function postJson(url, body) {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+    return resp.json();
+  }
+
+  btnPreview.addEventListener('click', async () => {
+    const dashboardId = dashSel.value;
+    const targetDbId  = dbSel.value;
+    if (!dashboardId || !targetDbId) {
+      setStatus('Please select both a dashboard and a target database.');
+      return;
+    }
+
+    btnPreview.disabled = true;
+    btnPromote.style.display = 'none';
+    setStatus('Loading preview…');
+    previewSec.style.display = 'none';
+
+    try {
+      const rows = await postJson('/promote_dashboard/api/preview', {
+        dashboard_id: parseInt(dashboardId),
+        target_db_id: parseInt(targetDbId),
+      });
+      currentPreview = rows;
+      renderTable(rows);
+      renderSummary(rows);
+      previewSec.style.display = 'block';
+      btnPromote.style.display = rows.some(r => r.status === 'will_swap') ? 'inline-block' : 'none';
+      setStatus('');
+    } catch (err) {
+      setStatus(`Preview failed: ${err.message}`);
+    } finally {
+      btnPreview.disabled = false;
+    }
+  });
+
+  btnPromote.addEventListener('click', async () => {
+    const dashboardId = dashSel.value;
+    const targetDbId  = dbSel.value;
+
+    btnPromote.disabled = true;
+    btnPreview.disabled = true;
+    setStatus('Promoting…');
+
+    try {
+      const results = await postJson('/promote_dashboard/api/promote', {
+        dashboard_id: parseInt(dashboardId),
+        target_db_id: parseInt(targetDbId),
+      });
+      renderTable(results);
+      renderSummary(results);
+      setStatus('Done.');
+    } catch (err) {
+      setStatus(`Promotion failed: ${err.message}`);
+      btnPromote.style.display = 'inline-block';
+      btnPromote.disabled = false;
+      btnPreview.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}
