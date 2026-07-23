@@ -88,15 +88,30 @@ class PromoteDashboardView(BaseView):
                 results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "skipped"})
                 continue
 
-            if row["status"] != "will_swap":
-                results.append({"chart_id": chart_id, "chart_name": chart_name, "status": row["status"]})
+            if row["status"] == "will_swap":
+                try:
+                    superset_api.sync_dataset_columns(row["matched_id"])
+                    superset_api.update_chart_datasource(chart_id, row["matched_id"])
+                    results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "promoted"})
+                except Exception as exc:
+                    logger.exception("Failed to update chart %s: %s", chart_id, exc)
+                    results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "failed", "error": str(exc)})
                 continue
 
-            try:
-                superset_api.update_chart_datasource(chart_id, row["matched_id"])
-                results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "promoted"})
-            except Exception as exc:
-                logger.exception("Failed to update chart %s: %s", chart_id, exc)
-                results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "failed", "error": str(exc)})
+            if row["status"] == "will_create":
+                try:
+                    new_ds = superset_api.create_dataset(target_db_id, row["src_table"], row.get("src_schema", ""))
+                    new_ds_id = new_ds.get("id")
+                    if not new_ds_id:
+                        raise ValueError("Dataset created but no ID returned")
+                    superset_api.sync_dataset_columns(new_ds_id)
+                    superset_api.update_chart_datasource(chart_id, new_ds_id)
+                    results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "created"})
+                except Exception as exc:
+                    logger.exception("Failed to create dataset for chart %s: %s", chart_id, exc)
+                    results.append({"chart_id": chart_id, "chart_name": chart_name, "status": "failed", "error": str(exc)})
+                continue
+
+            results.append({"chart_id": chart_id, "chart_name": chart_name, "status": row["status"]})
 
         return jsonify(results)

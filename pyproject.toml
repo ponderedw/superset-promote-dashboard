@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "superset-promote-dashboard"
-version = "0.1.0"
+version = "0.1.1"
 description = "Superset plugin to swap all chart datasources in a dashboard to a target database"
 readme = "README.md"
 packages = [{include = "superset_promote_dashboard"}]

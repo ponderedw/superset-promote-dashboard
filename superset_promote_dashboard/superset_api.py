@@ -112,6 +112,32 @@ def update_chart_datasource(chart_id: int, dataset_id: int) -> None:
     resp.raise_for_status()
 
 
+def create_dataset(db_id: int, table_name: str, schema: str = "") -> dict[str, Any]:
+    payload: dict[str, Any] = {"database": db_id, "table_name": table_name}
+    if schema:
+        payload["schema"] = schema
+    resp = requests.post(
+        f"{_base_url()}/api/v1/dataset/",
+        cookies=_cookies(),
+        headers=_auth_headers(),
+        json=payload,
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    # Superset returns {"id": <int>, "result": {...}} — id is top-level
+    return resp.json()
+
+
+def sync_dataset_columns(dataset_id: int) -> None:
+    resp = requests.put(
+        f"{_base_url()}/api/v1/dataset/{dataset_id}/refresh",
+        cookies=_cookies(),
+        headers=_auth_headers(),
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+
+
 # ---------------------------------------------------------------------------
 # Datasource parsing
 # ---------------------------------------------------------------------------
@@ -213,13 +239,16 @@ def build_preview(dashboard_charts: list[dict], target_datasets: list[dict]) -> 
                 "status": "already_current" if already_current else "will_swap",
             })
         else:
+            # Dataset doesn't exist in target DB yet — will be created on promote
             rows.append({
                 "chart_id": chart_id,
                 "chart_name": chart_name,
                 "current_dataset": src_table,
-                "matched_dataset": None,
+                "matched_dataset": src_table,
                 "matched_id": None,
-                "status": "no_match",
+                "src_table": src_table,
+                "src_schema": src_schema,
+                "status": "will_create",
             })
 
     return rows

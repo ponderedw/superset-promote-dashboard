@@ -119,6 +119,8 @@
   .badge-promoted       { background: #e6ffed; color: #276749; }
   .badge-failed         { background: #fff5f5; color: #c53030; }
   .badge-skipped        { background: #fafafa; color: #888; }
+  .badge-will_create    { background: #fef3c7; color: #92400e; }
+  .badge-created        { background: #d1fae5; color: #065f46; }
 
   .summary-bar {
     display: flex;
@@ -199,11 +201,13 @@
 
   function badgeHtml(status) {
     const labels = {
-      will_swap:       ['Will swap',        'badge-swap'],
+      will_swap:       ['Will swap',         'badge-swap'],
+      will_create:     ['Will create',       'badge-will_create'],
       already_current: ['Already on target', 'badge-already_current'],
       no_match:        ['No match',          'badge-no_match'],
       virtual:         ['Virtual — skip',    'badge-virtual'],
       promoted:        ['Promoted',          'badge-promoted'],
+      created:         ['Created',           'badge-created'],
       failed:          ['Failed',            'badge-failed'],
       skipped:         ['Skipped',           'badge-skipped'],
     };
@@ -224,11 +228,13 @@
   function renderSummary(rows) {
     const counts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
     const parts = [
-      counts.will_swap  ? `<strong>${counts.will_swap}</strong> will swap`   : null,
-      counts.no_match   ? `<strong>${counts.no_match}</strong> no match`     : null,
-      counts.virtual    ? `<strong>${counts.virtual}</strong> virtual`       : null,
-      counts.promoted   ? `<strong>${counts.promoted}</strong> promoted`     : null,
-      counts.failed     ? `<strong>${counts.failed}</strong> failed`         : null,
+      counts.will_swap    ? `<strong>${counts.will_swap}</strong> will swap`     : null,
+      counts.will_create  ? `<strong>${counts.will_create}</strong> will create` : null,
+      counts.no_match     ? `<strong>${counts.no_match}</strong> no match`       : null,
+      counts.virtual      ? `<strong>${counts.virtual}</strong> virtual`         : null,
+      counts.promoted     ? `<strong>${counts.promoted}</strong> promoted`       : null,
+      counts.created      ? `<strong>${counts.created}</strong> created`         : null,
+      counts.failed       ? `<strong>${counts.failed}</strong> failed`           : null,
     ].filter(Boolean);
     summaryBar.innerHTML = parts.join(' &nbsp;·&nbsp; ');
   }
@@ -275,7 +281,7 @@
       renderTable(rows);
       renderSummary(rows);
       previewSec.style.display = 'block';
-      btnPromote.style.display = rows.some(r => r.status === 'will_swap') ? 'inline-block' : 'none';
+      btnPromote.style.display = rows.some(r => r.status === 'will_swap' || r.status === 'will_create') ? 'inline-block' : 'none';
       setStatus('');
     } catch (err) {
       setStatus(`Preview failed: ${err.message}`);

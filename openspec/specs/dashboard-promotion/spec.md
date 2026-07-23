@@ -31,7 +31,7 @@ The UI SHALL display a dropdown listing all registered database connections, fet
 ---
 
 ### Requirement: Preview shows per-chart swap plan before execution
-When the user selects a dashboard and a target database and clicks "Preview", the plugin SHALL return a table showing each chart name, its current dataset, and the matched dataset in the target database (or "No match — will skip" if none found).
+When the user selects a dashboard and a target database and clicks "Preview", the plugin SHALL return a table showing each chart name, its current dataset, the target dataset name, and the planned action for each chart.
 
 #### Scenario: All charts have matching datasets in target
 - **WHEN** the user selects a dashboard where every chart's `table_name` exists as a dataset in the target database and clicks "Preview"
@@ -39,24 +39,36 @@ When the user selects a dashboard and a target database and clicks "Preview", th
 
 #### Scenario: Some charts have no matching dataset in target
 - **WHEN** the user selects a dashboard where one or more charts have no dataset with a matching `table_name` in the target database and clicks "Preview"
-- **THEN** those charts are listed with status "No match — will skip" and the execution button is still enabled
+- **THEN** those charts are listed with status "Will create" (a new dataset will be created in the target DB on promote) and the Promote button is still enabled
 
 #### Scenario: Chart backed by virtual (SQL) dataset
 - **WHEN** a chart in the selected dashboard is backed by a virtual (SQL-defined) dataset rather than a physical table
 - **THEN** the preview lists that chart with status "Virtual dataset — will skip"
 
+#### Scenario: Chart's source dataset cannot be resolved
+- **WHEN** the source dataset ID cannot be fetched (e.g. deleted dataset) and no `table_name` is determinable
+- **THEN** the preview lists that chart with status "No match" and it is skipped on promote
+
 ---
 
-### Requirement: Promotion updates chart datasource_id via Superset API
-When the user confirms execution, the plugin SHALL call `PUT /api/v1/chart/{id}` for each chart that has a match, setting `datasource_id` to the matched target dataset's id and `datasource_type` to `table`.
+### Requirement: Promotion syncs columns and updates chart datasource_id via Superset API
+When the user confirms execution, for each chart the plugin SHALL:
+1. If the target dataset already exists (`will_swap`): sync its columns via `PUT /api/v1/dataset/{id}/refresh`, then update the chart via `PUT /api/v1/chart/{id}`.
+2. If the target dataset does not exist (`will_create`): create it via `POST /api/v1/dataset/`, sync columns, then update the chart.
+
+The plugin SHALL NOT modify the source dataset's `database_id` — it only creates new datasets or updates chart pointers.
 
 #### Scenario: Successful promotion of all matched charts
 - **WHEN** the user clicks "Promote" after previewing a plan with matched charts
-- **THEN** each matched chart is updated via the Superset API, and the result view shows "Promoted" for each updated chart
+- **THEN** each matched chart has its target dataset columns synced, the chart is re-pointed to the target dataset, and the result view shows "Promoted"
 
-#### Scenario: Partial promotion when some charts have no match
-- **WHEN** the user clicks "Promote" and some charts have no matching dataset in the target database
-- **THEN** matched charts are updated and skipped charts are reported as "Skipped" in the result view, without raising an error
+#### Scenario: Charts with no existing target dataset are created and promoted
+- **WHEN** the user clicks "Promote" and some charts show "Will create" in the preview
+- **THEN** a new dataset is created in the target database for each such chart, columns are synced, the chart is re-pointed, and the result view shows "Created" for those charts
+
+#### Scenario: Partial promotion when some charts cannot be resolved
+- **WHEN** the user clicks "Promote" and some charts have unresolvable source datasets (no table_name)
+- **THEN** those charts are reported as their preview status (virtual, no_match) in the result view without raising an error
 
 #### Scenario: API error on a single chart does not abort the entire promotion
 - **WHEN** the Superset API returns an error for one chart during promotion
